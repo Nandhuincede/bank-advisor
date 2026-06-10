@@ -1,7 +1,6 @@
 # 🏦 AI Personal Banking Financial Advisor
 
-A production-quality full-stack application that combines **deterministic Python calculations** with a **LangChain Agent** to deliver personalised financial advice.
-
+Personal financial management can be difficult for individuals due to challenges in tracking income and expenses, understanding loan commitments, evaluating savings potential, and making informed financial decisions. This project addresses these challenges by developing an AI-powered Banking Financial Advisor that analyzes user-provided financial data such as monthly income, expenses, existing loan EMIs, savings, and financial goals to calculate key financial metrics including EMI ratio, savings rate, monthly surplus, projected annual savings, and credit utilization. Based on these calculations, the system leverages Large Language Models (LLMs) to generate personalized financial insights, affordability assessments, risk evaluations, and actionable recommendations, enabling users to better understand their financial health and make smarter financial decisions.
 ---
 
 ## Architecture
@@ -60,7 +59,7 @@ A production-quality full-stack application that combines **deterministic Python
 ```
 banking-advisor/
 ├── run.py                          # Entry point
-├── requirements.txt
+├── pyproject.toml
 ├── .env.example                    # Copy to .env and fill in keys
 ├── templates/
 │   └── index.html                  # Single-page UI
@@ -87,15 +86,15 @@ banking-advisor/
 ```bash
 git clone <repo>
 cd banking-advisor
-python -m venv venv
+uv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+uv sync #check needed packages are stored in pyproject.toml
 ```
 
 ### 2. Configure
 
 ```bash
-cp .env.example .env
+cp .env
 # Edit .env — choose your LLM_PROVIDER and add the API key
 ```
 
@@ -123,11 +122,13 @@ OLLAMA_MODEL=llama3
 ### 3. Run
 
 ```bash
-python run.py
+uv run python run.py 
 # → http://localhost:5000/
 ```
 
 ---
+### Financial Calculations Reference pdf
+![](uploads/Financialcalulation.pdf)
 
 ## API Reference
 
@@ -194,7 +195,8 @@ Returns a paginated summary of all past analyses.
 Returns the full analysis record plus complete chat history for that session.
 
 ---
-
+### Sequence Diagram
+![](uploads/Advisor.drawio.png)
 ## Financial Calculations
 
 All maths is performed in `services/financial_calculator.py` — zero LLM involvement:

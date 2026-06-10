@@ -1,6 +1,4 @@
 import os
-
-
 def get_llm():
     """Return a configured LangChain chat model based on LLM_PROVIDER env var."""
     provider = os.getenv("LLM_PROVIDER", "groq").lower().strip()

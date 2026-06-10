@@ -1,22 +1,37 @@
-
+import logging
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from langchain_core.language_models.chat_models import BaseChatModel
 
 from app.services.llm_factory import get_llm
 from app.tools.financial_tools import ALL_TOOLS
 
+logger = logging.getLogger(__name__)
 
 
-# System prompt — injected once, defines agent personality
 SYSTEM_PROMPT = """You are an expert AI Personal Banking & Financial Advisor with deep expertise \
-in Indian personal finance, investments, and credit management.
+in Indian personal finance, investments, credit management, and vehicle financing.
 
 Your responsibilities:
 1. Use the `compute_financial_metrics_tool` to calculate key ratios — NEVER compute them yourself.
 2. Interpret the computed metrics and produce a structured financial report.
 3. When answering follow-up questions, use `fetch_stored_analysis_tool` and \
 `fetch_chat_history_tool` to ground your answers in the user's actual data.
+4. When the user asks about buying a car or vehicle loan, use `evaluate_20_4_10_rule_tool`.
+
+## Strict Topic Restriction
+You are ONLY allowed to answer questions related to personal finance, banking, loans,
+investments, savings, credit cards, EMI, budgeting, and financial planning.
+
+If the user asks ANYTHING outside of finance — such as sports, politics, cooking,
+technology, entertainment, general knowledge, or any other non-financial topic —
+you must respond with EXACTLY this message and nothing else:
+
+"I am sorry, but I can only answer questions directly related to financial questions."
+
+Do NOT try to be helpful outside of finance. Do NOT partially answer then redirect.
+Just return that exact message and stop.
 
 ## Report Structure (for /api/analyze)
 Always produce a report with these exact sections:
@@ -27,7 +42,7 @@ Explain the rating in 2-3 sentences using the computed metrics.
 
 ### 💳 Loan Eligibility
 Based on EMI ratio and income, state whether the user qualifies for new credit and estimate \
-a rough eligible loan amount (use a standard 40 % EMI-to-income guideline).
+a rough eligible loan amount (use a standard 40% EMI-to-income guideline).
 
 ### 💰 Savings Recommendations
 3-5 concrete, actionable steps to improve savings rate and hit the stated savings goal.
@@ -44,6 +59,25 @@ If `is_deficit` is True (expenses exceed income), classify the condition as CRIT
 - Recommend immediate reduction of discretionary spending
 - Advise against taking any new loans
 - Focus exclusively on budget stabilisation before any investment discussion
+
+## 20/4/10 Car Loan Rule
+If the user asks anything about buying a car, car loan, vehicle finance, or car EMI
+during follow-up chat:
+1. Use the values they provide: car price, down payment, loan tenure, monthly EMI.
+2. Get their monthly_income from `fetch_stored_analysis_tool`.
+3. Call `evaluate_20_4_10_rule_tool` with all those values.
+4. Present the result clearly in this format:
+
+### 🚗 20/4/10 Car Buying Rule Evaluation
+- **Rule 1 — 20% Down Payment**: PASS/FAIL — paid X%, minimum 20% required
+- **Rule 2 — Max 4 Year Tenure**: PASS/FAIL — X years chosen, max 4 years allowed
+- **Rule 3 — Max 10% of Income**: PASS/FAIL — EMI is X% of income, max 10% allowed
+- **Overall**: PASS or FAIL
+
+Then list the suggestions returned by the tool to help the user improve their plan.
+
+If the user asks about the 20/4/10 rule without providing car details, explain the rule \
+clearly and ask them for: car price, down payment amount, loan tenure in years, and expected monthly EMI.
 
 ## Tone & Style
 - Be empathetic, clear, and specific — avoid generic platitudes.
@@ -68,22 +102,26 @@ precise ratios. Then interpret those ratios to produce the structured report."""
 
 
 def _build_agent() -> AgentExecutor:
-    """Construct a fresh AgentExecutor (stateless — state lives in DB)."""
-    llm = get_llm()
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", SYSTEM_PROMPT),
-        MessagesPlaceholder("chat_history"),
-        ("human", "{input}"),
-        MessagesPlaceholder("agent_scratchpad"),
-    ])
-    agent = create_tool_calling_agent(llm, ALL_TOOLS, prompt)
-    return AgentExecutor(
-        agent=agent,
-        tools=ALL_TOOLS,
-        verbose=True,
-        handle_parsing_errors=True,
-        max_iterations=6,
-    )
+    
+    try:
+        llm: BaseChatModel = get_llm()
+        prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages([
+            ("system", SYSTEM_PROMPT),
+            MessagesPlaceholder("chat_history"),
+            ("human", "{input}"),
+            MessagesPlaceholder("agent_scratchpad"),
+        ])
+        agent = create_tool_calling_agent(llm, ALL_TOOLS, prompt)
+        return AgentExecutor(
+            agent=agent,
+            tools=ALL_TOOLS,
+            verbose=True,
+            handle_parsing_errors=True,
+            max_iterations=8,
+        )
+    except Exception as e:
+        logger.error("Failed to build agent: %s", e)
+        raise RuntimeError(f"Agent initialisation failed: {e}") from e
 
 
 def run_analysis_agent(
@@ -96,24 +134,50 @@ def run_analysis_agent(
     savings_goal: float,
 ) -> str:
     """
-    Invoke the agent for a fresh financial analysis.
-    Returns the AI-generated report as a string.
+    Invoke the LangChain agent for a fresh financial analysis.
+
+    Args:
+        customer_name:     Full name of the customer.
+        monthly_income:    Monthly income in ₹.
+        monthly_expense:   Monthly expenses in ₹.
+        existing_loan_emi: Existing loan EMI in ₹.
+        credit_card_limit: Credit card limit in ₹ (0 if no card).
+        credit_card_used:  Credit card used amount in ₹ (0 if no card).
+        savings_goal:      Target savings amount in ₹.
+
+    Returns:
+        str: The AI-generated structured financial report.
+
+    Raises:
+        ValueError: If customer_name is blank.
+        RuntimeError: If the agent invocation fails.
     """
-    executor = _build_agent()
-    human_msg = ANALYSIS_HUMAN_TEMPLATE.format(
-        customer_name=customer_name,
-        monthly_income=monthly_income,
-        monthly_expense=monthly_expense,
-        existing_loan_emi=existing_loan_emi,
-        credit_card_limit=credit_card_limit,
-        credit_card_used=credit_card_used,
-        savings_goal=savings_goal,
-    )
-    result = executor.invoke({
-        "input": human_msg,
-        "chat_history": [],
-    })
-    return result["output"]
+    if not customer_name or not customer_name.strip():
+        raise ValueError("customer_name cannot be empty.")
+
+    try:
+        executor: AgentExecutor = _build_agent()
+        human_msg: str = ANALYSIS_HUMAN_TEMPLATE.format(
+            customer_name=customer_name,
+            monthly_income=monthly_income,
+            monthly_expense=monthly_expense,
+            existing_loan_emi=existing_loan_emi,
+            credit_card_limit=credit_card_limit,
+            credit_card_used=credit_card_used,
+            savings_goal=savings_goal,
+        )
+        logger.info("Running analysis agent for customer='%s'", customer_name)
+        result: dict = executor.invoke({
+            "input": human_msg,
+            "chat_history": [],
+        })
+        return result["output"]
+    except KeyError as e:
+        logger.error("Agent response missing 'output' key: %s", e)
+        raise RuntimeError("Agent returned an unexpected response format.") from e
+    except Exception as e:
+        logger.error("Analysis agent failed for customer='%s': %s", customer_name, e)
+        raise RuntimeError(f"Analysis agent failed: {e}") from e
 
 
 def run_chat_agent(
@@ -122,29 +186,54 @@ def run_chat_agent(
     chat_history: list[dict],
 ) -> str:
     """
-    Invoke the agent for a follow-up question, with full context.
-    chat_history: list of {role, content} dicts from the DB.
-    Returns the AI response string.
+    Invoke the LangChain agent for a follow-up question with full context.
+
+    Args:
+        analysis_id:   The stored analysis session ID (used to fetch context).
+        user_question: The follow-up question from the user.
+        chat_history:  List of {role, content} dicts from the DB (may be empty).
+
+    Returns:
+        str: The AI-generated contextual answer.
+
+    Raises:
+        ValueError: If user_question is blank or analysis_id is invalid.
+        RuntimeError: If the agent invocation fails.
     """
-    executor = _build_agent()
+    if not user_question or not user_question.strip():
+        raise ValueError("user_question cannot be empty.")
+    if not isinstance(analysis_id, int) or analysis_id <= 0:
+        raise ValueError(f"analysis_id must be a positive integer, got {analysis_id!r}.")
 
-    # Convert DB history to LangChain message objects
-    lc_history = []
-    for msg in chat_history:
-        if msg["role"] == "user":
-            lc_history.append(HumanMessage(content=msg["content"]))
-        else:
-            lc_history.append(AIMessage(content=msg["content"]))
+    try:
+        executor: AgentExecutor = _build_agent()
 
-    system_context = (
-        f"The user is asking a follow-up question about their financial analysis "
-        f"(analysis_id={analysis_id}). Use `fetch_stored_analysis_tool` with "
-        f"'{analysis_id}' and `fetch_chat_history_tool` if you need context. "
-        f"Then answer the user's question concisely and helpfully."
-    )
+        lc_history: list[BaseMessage] = []
+        for msg in chat_history:
+            if msg.get("role") == "user":
+                lc_history.append(HumanMessage(content=msg["content"]))
+            elif msg.get("role") == "assistant":
+                lc_history.append(AIMessage(content=msg["content"]))
 
-    result = executor.invoke({
-        "input": f"{system_context}\n\nUser question: {user_question}",
-        "chat_history": lc_history,
-    })
-    return result["output"]
+        system_context: str = (
+            f"The user is asking a follow-up question about their financial analysis "
+            f"(analysis_id={analysis_id}). Use `fetch_stored_analysis_tool` with "
+            f"'{analysis_id}' and `fetch_chat_history_tool` if you need context. "
+            f"If the question is about buying a car or vehicle loan, use "
+            f"`evaluate_20_4_10_rule_tool` with the car details they provide and "
+            f"their monthly_income from the stored analysis. "
+            f"Then answer the user's question concisely and helpfully."
+        )
+
+        logger.info("Running chat agent for analysis_id=%d", analysis_id)
+        result: dict = executor.invoke({
+            "input": f"{system_context}\n\nUser question: {user_question}",
+            "chat_history": lc_history,
+        })
+        return result["output"]
+    except KeyError as e:
+        logger.error("Chat agent response missing 'output' key: %s", e)
+        raise RuntimeError("Agent returned an unexpected response format.") from e
+    except Exception as e:
+        logger.error("Chat agent failed for analysis_id=%d: %s", analysis_id, e)
+        raise RuntimeError(f"Chat agent failed: {e}") from e
