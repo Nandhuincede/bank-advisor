@@ -128,7 +128,7 @@ uv run python run.py
 
 ---
 ### Financial Calculations Reference pdf
-![](uploads/Financialcalulation.pdf)
+![view Financial Calculations Reference pdf](./uploads/Financialcalulation.pdf)
 
 ## API Reference
 
