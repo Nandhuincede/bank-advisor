@@ -198,10 +198,10 @@ uv run python run.py
 
 ---
 ### Financial Calculations Reference pdf
-<p>
-<button onclick="window.open('/uploads/Financialcalulation.pdf', '_blank')">
-    Open PDF
-</button>
+<p align="center">
+  <button onclick="window.open('/uploads/Financialcalulation.pdf', '_blank')" style="padding: 12px 24px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+    📥 Open Financial Calculations PDF
+  </button>
 </p>
 ## API Reference
 
