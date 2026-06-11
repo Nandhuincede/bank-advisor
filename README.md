@@ -53,7 +53,77 @@ Personal financial management can be difficult for individuals due to challenges
 **Key design principle:** The LLM *never* does maths. It calls `compute_financial_metrics_tool`, receives the deterministic Python output, then interprets the numbers into a human financial report.
 
 ---
+## work flow
+Step 1 — User fills form
+         name, income, expenses, loan EMI, savings goal
+         (credit card fields are optional)
+              |
+              v
+Step 2 — Flask receives request (routes.py)
+         
+              |
+              v
+Step 3 — validate_inputs()
+         checks all required fields are present and valid
+              |
+              v
+         Is input valid?
+         /           \
+        No            Yes
+        |              |
+        v              v
+   Return      Step 4 — Python calculator
+   error msg             computes EMI ratio,
+                         savings rate,
+                         credit utilization,
+                         projected annual savings,
+                         monthly surplus,
+                         deficit flag
+                              |
+                              v
+                    Step 5 — LangChain agent
+                             calls compute_financial_metrics_tool
+                             tool runs Python calculation
+                             returns JSON metrics to agent
+                              |
+                              v
+                    Step 6 — Groq LLM
+                             receives computed metrics
+                             interprets numbers
+                             writes structured 5-section report
+                              |
+                              v
+                    Step 7 — SQLite — analysis table
+                             saves all inputs,
+                             all metrics,
+                             full AI report
+                              |
+                              v
+                    Step 8 — Browser shows result
+                             metric cards displayed
+                             AI report displayed
 
+
+                             Step 1 — User types a question
+                                  in the chat window
+                                        |
+                                        v
+                          Step 2 — SQLite — fetch context
+                                  get_analysis(analysis_id)
+                                  get_chat_history(analysis_id)
+                                        |
+                                        v
+                          Step 3 — LangChain agent + Groq LLM
+                                  question + stored analysis + chat history
+                                  all passed as context to the agent
+                                  Groq generates a contextual answer
+                                        |
+                                        v
+                          Step 4 — Save + return answer
+                                  saves user question to chat_history table
+                                  saves AI answer to chat_history table
+                                  returns answer to browser
+                                  browser displays in chat window
 ## Project Structure
 
 ```
@@ -128,7 +198,7 @@ uv run python run.py
 
 ---
 ### Financial Calculations Reference pdf
-![view Financial Calculations Reference pdf](./uploads/Financialcalulation.pdf)
+![view Financial Calculations Reference pdf](.uploads/Financialcalulation.pdf)
 
 ## API Reference
 
@@ -197,6 +267,14 @@ Returns the full analysis record plus complete chat history for that session.
 ---
 ### Sequence Diagram
 ![](uploads/Advisor.drawio.png)
+### Screen shots
+![](uploads/screen1.png)
+
+![](uploads/screen2.png)
+
+![](uploads/screen3.png)
+
+![](uploads/screen4.png)
 ## Financial Calculations
 
 All maths is performed in `services/financial_calculator.py` — zero LLM involvement:
