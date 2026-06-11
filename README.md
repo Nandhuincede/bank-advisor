@@ -199,9 +199,9 @@ uv run python run.py
 ---
 ### Financial Calculations Reference pdf
 <p>
-<a href="uploads/Financialcalulation.pdf" target="_blank">
-  view Financial Calculations Reference pdf
-  </a>
+<button onclick="window.open('/uploads/Financialcalulation.pdf', '_blank')">
+    Open PDF
+</button>
 </p>
 ## API Reference
 
