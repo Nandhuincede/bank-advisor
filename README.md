@@ -54,33 +54,33 @@ Personal financial management can be difficult for individuals due to challenges
 
 ---
 ## work flow
-Step 1 — User fills form
-         name, income, expenses, loan EMI, savings goal
-         (credit card fields are optional)
-              |
-              v
-Step 2 — Flask receives request (routes.py)
-         
-              |
-              v
-Step 3 — validate_inputs()
-         checks all required fields are present and valid
-              |
-              v
-         Is input valid?
-         /           \
-        No            Yes
-        |              |
-        v              v
-   Return      Step 4 — Python calculator
-   error msg             computes EMI ratio,
-                         savings rate,
-                         credit utilization,
-                         projected annual savings,
-                         monthly surplus,
-                         deficit flag
+                Step 1 — User fills form
+                        name, income, expenses, loan EMI, savings goal
+                        (credit card fields are optional)
                               |
                               v
+                Step 2 — Flask receives request (routes.py)
+                        
+                              |
+                              v
+                Step 3 — validate_inputs()
+                        checks all required fields are present and valid
+                              |
+                              v
+                        Is input valid?
+                        /           \
+                        No            Yes
+                        |              |
+                        v              v
+                  Return      Step 4 — Python calculator
+                  error msg             computes EMI ratio,
+                                        savings rate,
+                                        credit utilization,
+                                        projected annual savings,
+                                        monthly surplus,
+                                        deficit flag
+                                              |
+                                              v
                     Step 5 — LangChain agent
                              calls compute_financial_metrics_tool
                              tool runs Python calculation
@@ -198,8 +198,11 @@ uv run python run.py
 
 ---
 ### Financial Calculations Reference pdf
-![view Financial Calculations Reference pdf](.uploads/Financialcalulation.pdf)
-
+<p>
+<a href="uploads/Financialcalulation.pdf" target="_blank">
+  view Financial Calculations Reference pdf
+  </a>
+</p>
 ## API Reference
 
 ### `POST /api/analyze`
