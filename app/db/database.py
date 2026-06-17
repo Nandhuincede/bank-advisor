@@ -48,7 +48,7 @@ def init_db() -> None:
                     emi_ratio                REAL NOT NULL,
                     savings_rate             REAL NOT NULL,
                     credit_utilization       REAL NOT NULL,
-                    projected_annual_savings REAL NOT NULL,
+                    projected_annual_savings REAL NOT NULL,       -- (income - expense - emi) × 12
                     ai_report                TEXT NOT NULL,
                     created_at               TEXT NOT NULL
                 );
