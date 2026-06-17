@@ -81,6 +81,7 @@ def analyze() -> tuple[Response, int]:
             savings_rate=metrics.savings_rate,
             credit_utilization=metrics.credit_utilization,
             projected_annual_savings=metrics.projected_annual_savings,
+            monthly_surplus=metrics.monthly_surplus,
             ai_report=ai_report,
         )
     except RuntimeError as e:

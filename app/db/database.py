@@ -49,6 +49,7 @@ def init_db() -> None:
                     savings_rate             REAL NOT NULL,
                     credit_utilization       REAL NOT NULL,
                     projected_annual_savings REAL NOT NULL,
+                    monthly_surplus          REAL NOT NULL,
                     ai_report                TEXT NOT NULL,
                     created_at               TEXT NOT NULL
                 );
@@ -62,6 +63,13 @@ def init_db() -> None:
                     FOREIGN KEY (analysis_id) REFERENCES analysis(id)
                 );
             """)
+            # Migrate existing databases that pre-date the monthly_surplus column.
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(analysis)").fetchall()}
+            if "monthly_surplus" not in cols:
+                conn.execute(
+                    "ALTER TABLE analysis ADD COLUMN monthly_surplus REAL NOT NULL DEFAULT 0.0"
+                )
+                logger.info("Migrated analysis table: added monthly_surplus column")
         logger.info("Database initialised at '%s'", DATABASE_PATH)
     except sqlite3.Error as e:
         logger.error("Failed to initialise database: %s", e)
@@ -80,6 +88,7 @@ def save_analysis(
     savings_rate: float,
     credit_utilization: float,
     projected_annual_savings: float,
+    monthly_surplus: float,
     ai_report: str,
 ) -> int:
     """
@@ -97,6 +106,7 @@ def save_analysis(
         savings_rate: Computed savings rate %.
         credit_utilization: Computed credit utilization %.
         projected_annual_savings: Computed annual savings projection ₹.
+        monthly_surplus: Computed monthly surplus (income − expenses) ₹.
         ai_report: Full AI-generated financial report text.
 
     Returns:
@@ -114,14 +124,14 @@ def save_analysis(
                     existing_loan_emi, credit_card_limit, credit_card_used,
                     savings_goal, emi_ratio, savings_rate,
                     credit_utilization, projected_annual_savings,
-                    ai_report, created_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    monthly_surplus, ai_report, created_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     customer_name, monthly_income, monthly_expense,
                     existing_loan_emi, credit_card_limit, credit_card_used,
                     savings_goal, emi_ratio, savings_rate,
                     credit_utilization, projected_annual_savings,
-                    ai_report, now,
+                    monthly_surplus, ai_report, now,
                 ),
             )
             row_id: int = cur.lastrowid
