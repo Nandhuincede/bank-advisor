@@ -1,4 +1,5 @@
 import logging
+import threading
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
@@ -124,6 +125,34 @@ def _build_agent() -> AgentExecutor:
         raise RuntimeError(f"Agent initialisation failed: {e}") from e
 
 
+# Module-level cache so the LLM client + AgentExecutor are built once per
+# process instead of on every /api/analyze or /api/chat request. Safe to
+# cache because chat_history and the human input are supplied per-call via
+# executor.invoke(...) — none of that is baked into the AgentExecutor itself.
+_agent_executor: AgentExecutor | None = None
+_agent_lock = threading.Lock()
+
+
+def _get_agent() -> AgentExecutor:
+    """
+    Return a process-wide cached AgentExecutor, building it on first use.
+
+    Thread-safe via a double-checked lock so concurrent requests racing to
+    initialise the agent don't each build their own (and don't block once
+    it's already warm).
+
+    Raises:
+        RuntimeError: If agent construction fails (cache stays empty so a
+            later request can retry rather than permanently failing).
+    """
+    global _agent_executor
+    if _agent_executor is None:
+        with _agent_lock:
+            if _agent_executor is None:  # re-check inside the lock
+                _agent_executor = _build_agent()
+    return _agent_executor
+
+
 def run_analysis_agent(
     customer_name: str,
     monthly_income: float,
@@ -156,7 +185,7 @@ def run_analysis_agent(
         raise ValueError("customer_name cannot be empty.")
 
     try:
-        executor: AgentExecutor = _build_agent()
+        executor: AgentExecutor = _get_agent()
         human_msg: str = ANALYSIS_HUMAN_TEMPLATE.format(
             customer_name=customer_name,
             monthly_income=monthly_income,
@@ -206,7 +235,7 @@ def run_chat_agent(
         raise ValueError(f"analysis_id must be a positive integer, got {analysis_id!r}.")
 
     try:
-        executor: AgentExecutor = _build_agent()
+        executor: AgentExecutor = _get_agent()
 
         lc_history: list[BaseMessage] = []
         for msg in chat_history:

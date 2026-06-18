@@ -9,7 +9,6 @@ wheels/
 # Virtual environments
 .venv
 banking_advisor.db
-banking_advisor.db
 banking_advisor.db-shm
 banking_advisor.db-wal
 *.db
