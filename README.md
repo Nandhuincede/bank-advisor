@@ -229,7 +229,7 @@ uv run python run.py
     "emi_ratio": 14.12,
     "savings_rate": 47.06,
     "credit_utilization": 30.0,
-    "projected_annual_savings": 480000,
+    "projected_annual_savings": 336000,
     "monthly_surplus": 40000,
     "is_deficit": false
   },
@@ -287,7 +287,7 @@ All maths is performed in `services/financial_calculator.py` — zero LLM involv
 | EMI Ratio | `existing_loan_emi / monthly_income × 100` |
 | Savings Rate | `(monthly_income - monthly_expense) / monthly_income × 100` |
 | Credit Utilization | `credit_card_used / credit_card_limit × 100` |
-| Projected Annual Savings | `(monthly_income - monthly_expense) × 12` |
+| Projected Annual Savings | `(monthly_income - monthly_expense - existing_loan_emi) × 12` |
 
 ---
 
@@ -316,7 +316,7 @@ CREATE TABLE analysis (
     emi_ratio               REAL,
     savings_rate            REAL,
     credit_utilization      REAL,
-    projected_annual_savings REAL,
+    projected_annual_savings REAL,  -- (income - expense - emi) × 12
     ai_report               TEXT,
     created_at              TEXT
 );

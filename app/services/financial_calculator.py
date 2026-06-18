@@ -43,7 +43,7 @@ def compute_financial_metrics(
     EMI Ratio            = existing_loan_emi / monthly_income × 100
     Savings Rate         = (monthly_income - monthly_expense) / monthly_income × 100
     Credit Utilization   = credit_card_used / credit_card_limit × 100 (0 if no card)
-    Projected Ann. Sav.  = (monthly_income - monthly_expense) × 12
+    Projected Ann. Sav.  = (monthly_income - monthly_expense - existing_loan_emi) × 12
 
     Args:
         monthly_income:    Gross monthly income in ₹. Must be > 0.
@@ -90,7 +90,7 @@ def compute_financial_metrics(
     credit_utilization: float       = (
         (credit_card_used / credit_card_limit) * 100 if has_credit_card else 0.0
     )
-    projected_annual_savings: float = monthly_surplus * 12
+    projected_annual_savings: float = (monthly_surplus - existing_loan_emi) * 12
 
     logger.debug(
         "Metrics computed — EMI ratio: %.2f%%, savings rate: %.2f%%, "
