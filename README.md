@@ -1,7 +1,6 @@
 # 🏦 AI Personal Banking Financial Advisor
 
-A production-quality full-stack application that combines **deterministic Python calculations** with a **LangChain Agent** to deliver personalised financial advice.
-
+Personal financial management can be difficult for individuals due to challenges in tracking income and expenses, understanding loan commitments, evaluating savings potential, and making informed financial decisions. This project addresses these challenges by developing an AI-powered Banking Financial Advisor that analyzes user-provided financial data such as monthly income, expenses, existing loan EMIs, savings, and financial goals to calculate key financial metrics including EMI ratio, savings rate, monthly surplus, projected annual savings, and credit utilization. Based on these calculations, the system leverages Large Language Models (LLMs) to generate personalized financial insights, affordability assessments, risk evaluations, and actionable recommendations, enabling users to better understand their financial health and make smarter financial decisions.
 ---
 
 ## Architecture
@@ -54,13 +53,83 @@ A production-quality full-stack application that combines **deterministic Python
 **Key design principle:** The LLM *never* does maths. It calls `compute_financial_metrics_tool`, receives the deterministic Python output, then interprets the numbers into a human financial report.
 
 ---
+## work flow
+                Step 1 — User fills form
+                        name, income, expenses, loan EMI, savings goal
+                        (credit card fields are optional)
+                              |
+                              v
+                Step 2 — Flask receives request (routes.py)
+                        
+                              |
+                              v
+                Step 3 — validate_inputs()
+                        checks all required fields are present and valid
+                              |
+                              v
+                        Is input valid?
+                        /           \
+                        No            Yes
+                        |              |
+                        v              v
+                  Return      Step 4 — Python calculator
+                  error msg             computes EMI ratio,
+                                        savings rate,
+                                        credit utilization,
+                                        projected annual savings,
+                                        monthly surplus,
+                                        deficit flag
+                                              |
+                                              v
+                    Step 5 — LangChain agent
+                             calls compute_financial_metrics_tool
+                             tool runs Python calculation
+                             returns JSON metrics to agent
+                              |
+                              v
+                    Step 6 — Groq LLM
+                             receives computed metrics
+                             interprets numbers
+                             writes structured 5-section report
+                              |
+                              v
+                    Step 7 — SQLite — analysis table
+                             saves all inputs,
+                             all metrics,
+                             full AI report
+                              |
+                              v
+                    Step 8 — Browser shows result
+                             metric cards displayed
+                             AI report displayed
 
+
+                             Step 1 — User types a question
+                                  in the chat window
+                                        |
+                                        v
+                          Step 2 — SQLite — fetch context
+                                  get_analysis(analysis_id)
+                                  get_chat_history(analysis_id)
+                                        |
+                                        v
+                          Step 3 — LangChain agent + Groq LLM
+                                  question + stored analysis + chat history
+                                  all passed as context to the agent
+                                  Groq generates a contextual answer
+                                        |
+                                        v
+                          Step 4 — Save + return answer
+                                  saves user question to chat_history table
+                                  saves AI answer to chat_history table
+                                  returns answer to browser
+                                  browser displays in chat window
 ## Project Structure
 
 ```
 banking-advisor/
 ├── run.py                          # Entry point
-├── requirements.txt
+├── pyproject.toml
 ├── .env.example                    # Copy to .env and fill in keys
 ├── templates/
 │   └── index.html                  # Single-page UI
@@ -87,15 +156,15 @@ banking-advisor/
 ```bash
 git clone <repo>
 cd banking-advisor
-python -m venv venv
+uv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+uv sync #check needed packages are stored in pyproject.toml
 ```
 
 ### 2. Configure
 
 ```bash
-cp .env.example .env
+cp .env
 # Edit .env — choose your LLM_PROVIDER and add the API key
 ```
 
@@ -123,12 +192,17 @@ OLLAMA_MODEL=llama3
 ### 3. Run
 
 ```bash
-python run.py
+uv run python run.py 
 # → http://localhost:5000/
 ```
 
 ---
-
+### Financial Calculations Reference pdf
+<p align="center">
+  <a href="https://drive.google.com/file/d/1bTFW65_txGbV5OSWJs00hi2AjOaac_2m/view?usp=drive_link" target ="_blank">📥 Open Financial Calculations PDF</a>
+    
+  </button>
+</p>
 ## API Reference
 
 ### `POST /api/analyze`
@@ -155,7 +229,7 @@ python run.py
     "emi_ratio": 14.12,
     "savings_rate": 47.06,
     "credit_utilization": 30.0,
-    "projected_annual_savings": 480000,
+    "projected_annual_savings": 336000,
     "monthly_surplus": 40000,
     "is_deficit": false
   },
@@ -194,7 +268,16 @@ Returns a paginated summary of all past analyses.
 Returns the full analysis record plus complete chat history for that session.
 
 ---
+### Sequence Diagram
+![](uploads/Advisor.drawio.png)
+### Screen shots
+![](uploads/screen1.png)
 
+![](uploads/screen2.png)
+
+![](uploads/screen3.png)
+
+![](uploads/screen4.png)
 ## Financial Calculations
 
 All maths is performed in `services/financial_calculator.py` — zero LLM involvement:
@@ -204,7 +287,7 @@ All maths is performed in `services/financial_calculator.py` — zero LLM involv
 | EMI Ratio | `existing_loan_emi / monthly_income × 100` |
 | Savings Rate | `(monthly_income - monthly_expense) / monthly_income × 100` |
 | Credit Utilization | `credit_card_used / credit_card_limit × 100` |
-| Projected Annual Savings | `(monthly_income - monthly_expense) × 12` |
+| Projected Annual Savings | `(monthly_income - monthly_expense - existing_loan_emi) × 12` |
 
 ---
 
@@ -233,7 +316,7 @@ CREATE TABLE analysis (
     emi_ratio               REAL,
     savings_rate            REAL,
     credit_utilization      REAL,
-    projected_annual_savings REAL,
+    projected_annual_savings REAL,  -- (income - expense - emi) × 12
     ai_report               TEXT,
     created_at              TEXT
 );
